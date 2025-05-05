@@ -12,11 +12,12 @@ from eyecolor_processor import apply_eyecolor
 from eye_shadow_processor import apply_eyeshadow
 from typing import Optional
 from pydantic import BaseModel
+from fastapi import Body
 
 app = FastAPI()
 
 # Lipstick API Endpoint
-@app.post("/apply-lipstick/")
+@app.post("/apply-lipstick")
 async def process_image(
     file: UploadFile = File(...),
     r: int = Form(255),
@@ -41,7 +42,7 @@ async def process_image(
 
 
 # Eyeliner API Endpoint
-@app.post("/apply-eyeliner/")
+@app.post("/apply-eyeliner")
 async def apply_eyeliner_api(
     file: UploadFile = File(...),  # Image file
     r: int = Form(...),  # Red value
@@ -67,7 +68,7 @@ async def apply_eyeliner_api(
 
 
 
-@app.post("/apply-blusher/")
+@app.post("/apply-blusher")
 async def apply_blusher_endpoint(
     file: UploadFile = File(...),
     r: int = Form(...),  # Red color component
@@ -93,7 +94,7 @@ async def apply_blusher_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/apply-foundation/")
+@app.post("/apply-foundation")
 async def apply_foundation_api(
     file: UploadFile = File(...),
     r: int = Form(...),
@@ -121,7 +122,7 @@ async def apply_foundation_api(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/apply-eyecolor/")
+@app.post("/apply-eyecolor")
 async def apply_eyecolor_endpoint(
     file: UploadFile = File(...),
     r: int = Form(...),  # Red color component
@@ -150,7 +151,7 @@ async def apply_eyecolor_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/apply-eyeshadow/")
+@app.post("/apply-eyeshadow")
 async def apply_eyeshadow_endpoint(
     file: UploadFile = File(...),
     r: int = Form(...),  # Red color component
@@ -168,5 +169,113 @@ async def apply_eyeshadow_endpoint(
         _, buffer = cv2.imencode('.jpg', processed_image)
 
         return Response(content=buffer.tobytes(), media_type="image/jpeg")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+class ColorParams(BaseModel):
+    r: int
+    g: int
+    b: int
+    intensity: Optional[float] = 1.0
+    edge: Optional[int] = 10  # Only used by lipstick
+
+class ApplyMakeupRequest(BaseModel):
+    lipstickEnable: Optional[bool] = False
+    lipstick: Optional[ColorParams] = None
+
+    eyelinerEnable: Optional[bool] = False
+    eyeliner: Optional[ColorParams] = None
+
+    blusherEnable: Optional[bool] = False
+    blusher: Optional[ColorParams] = None
+
+    foundationEnable: Optional[bool] = False
+    foundation: Optional[ColorParams] = None
+
+    eyecolorEnable: Optional[bool] = False
+    eyecolor: Optional[ColorParams] = None
+
+    eyeshadowEnable: Optional[bool] = False
+    eyeshadow: Optional[ColorParams] = None
+
+# Combined Endpoint
+@app.post("/apply")
+async def apply_makeup(
+    file: UploadFile = File(...),
+    params: ApplyMakeupRequest = Body(...)
+):
+    contents = await file.read()
+    np_arr = np.frombuffer(contents, np.uint8)
+    image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+    if image is None:
+        raise HTTPException(status_code=400, detail="Invalid image")
+
+    try:
+        # Lipstick
+        if params.lipstickEnable and params.lipstick:
+            image = apply_lipstick(
+                image,
+                [params.lipstick.b, params.lipstick.g, params.lipstick.r],
+                params.lipstick.intensity,
+                params.lipstick.edge or 10
+            )
+
+        # Eyeliner
+        if params.eyelinerEnable and params.eyeliner:
+            eyeliner_buffer = cv2.imencode(".jpg", image)[1].tobytes()
+            image = apply_eyeliner(
+                eyeliner_buffer,
+                params.eyeliner.r,
+                params.eyeliner.g,
+                params.eyeliner.b
+            )
+
+        # Blusher
+        if params.blusherEnable and params.blusher:
+            blusher_buffer = cv2.imencode(".jpg", image)[1].tobytes()
+            image = apply_blusher(
+                blusher_buffer,
+                params.blusher.r,
+                params.blusher.g,
+                params.blusher.b,
+                params.blusher.intensity
+            )
+
+        # Foundation
+        if params.foundationEnable and params.foundation:
+            image = apply_foundation(
+                image,
+                [params.foundation.r, params.foundation.g, params.foundation.b],
+                params.foundation.intensity
+            )
+
+        # Eye color
+        if params.eyecolorEnable and params.eyecolor:
+            image = apply_eyecolor(
+                image,
+                params.eyecolor.r,
+                params.eyecolor.g,
+                params.eyecolor.b
+            )
+
+        # Eye shadow
+        if params.eyeshadowEnable and params.eyeshadow:
+            shadow_buffer = cv2.imencode(".jpg", image)[1].tobytes()
+            image = apply_eyeshadow(
+                shadow_buffer,
+                params.eyeshadow.r,
+                params.eyeshadow.g,
+                params.eyeshadow.b,
+                params.eyeshadow.intensity
+            )
+
+        # Encode final image
+        _, final_image = cv2.imencode(".jpg", image)
+        return Response(content=final_image.tobytes(), media_type="image/jpeg")
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
