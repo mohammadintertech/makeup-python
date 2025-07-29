@@ -31,19 +31,21 @@ def apply_makeup():
 
         processed = image.copy()
         form = request.form
-
+        print('1')
         # Foundation
         if form.get('enable_foundation') == 'true':
             r, g, b = form.get('foundation_r'), form.get('foundation_g'), form.get('foundation_b')
             intensity = form.get('foundation_intensity')
             if all([r, g, b, intensity]):
                 processed = apply_foundation(processed, [int(r), int(g), int(b)], float(intensity))
+        print('2')
         # Blusher
         if form.get('enable_blusher') == 'true':
             r, g, b = form.get('blusher_r'), form.get('blusher_g'), form.get('blusher_b')
             intensity = form.get('blusher_intensity')
             if all([r, g, b, intensity]):
                 processed = apply_blusher(processed, [int(r), int(g), int(b)], float(intensity))
+        print('3')
         # Lipstick
         if form.get('enable_lipstick') == 'true':
             r, g, b = form.get('lipstick_r'), form.get('lipstick_g'), form.get('lipstick_b')
@@ -51,13 +53,14 @@ def apply_makeup():
             edge = form.get('lipstick_edge')
             if all([r, g, b, intensity, edge]):
                 processed = apply_lipstick(processed, [int(r), int(g), int(b)], float(intensity), int(edge))
+        print('4')
 
         # Eyeliner
         if form.get('enable_eyeliner') == 'true':
             r, g, b = form.get('eyeliner_r'), form.get('eyeliner_g'), form.get('eyeliner_b')
             if all([r, g, b]):
                 processed = apply_eyeliner(processed, [int(r), int(g), int(b)])
-
+        print('5')
         # Eye color
         if form.get('enable_eyecolor') == 'true':
             r, g, b = form.get('eyecolor_r'), form.get('eyecolor_g'), form.get('eyecolor_b')
