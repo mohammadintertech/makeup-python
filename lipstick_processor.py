@@ -1,6 +1,7 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+import logging
 
 mp_face_mesh = mp.solutions.face_mesh
 
