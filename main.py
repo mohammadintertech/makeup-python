@@ -26,12 +26,10 @@ def apply_makeup():
         contents = file.read()
         np_arr = np.frombuffer(contents, np.uint8)
         image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        return "here3"
         if image is None:
             return jsonify({"error": "Invalid image"}), 400
 
         processed = image.copy()
-        return "here4"
         form = request.form
 
         # Foundation
