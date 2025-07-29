@@ -38,14 +38,12 @@ def apply_makeup():
             intensity = form.get('foundation_intensity')
             if all([r, g, b, intensity]):
                 processed = apply_foundation(processed, [int(r), int(g), int(b)], float(intensity))
-        return "here5"
         # Blusher
         if form.get('enable_blusher') == 'true':
             r, g, b = form.get('blusher_r'), form.get('blusher_g'), form.get('blusher_b')
             intensity = form.get('blusher_intensity')
             if all([r, g, b, intensity]):
                 processed = apply_blusher(processed, [int(r), int(g), int(b)], float(intensity))
-        return "here"
         # Lipstick
         if form.get('enable_lipstick') == 'true':
             r, g, b = form.get('lipstick_r'), form.get('lipstick_g'), form.get('lipstick_b')
@@ -72,6 +70,7 @@ def apply_makeup():
             intensity = form.get('eyeshadow_intensity')
             if all([r, g, b, intensity]):
                 processed = apply_eyeshadow(processed, [int(r), int(g), int(b)], float(intensity))
+        return "here"
 
         _, img_encoded = cv2.imencode(".png", processed)
 
