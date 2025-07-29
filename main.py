@@ -21,10 +21,9 @@ def apply_makeup():
     try:
         if 'file' not in request.files:
             return jsonify({"error": "No file uploaded"}), 400
+
         file = request.files['file']
-        return "here2"
         contents = file.read()
-        return "here1"
         np_arr = np.frombuffer(contents, np.uint8)
         image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         return "here3"
