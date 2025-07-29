@@ -8,8 +8,17 @@ from blusher_processor import apply_blusher
 from foundation_processor import apply_foundation
 from eyecolor_processor import apply_eyecolor
 from eye_shadow_processor import apply_eyeshadow
-
+import os
 app = Flask(__name__)
+
+
+@app.route("/app", methods=["get"])
+def app1():
+    return "Server is running! app"
+
+@app.route("/test", methods=["POST"])
+def test():
+    return "Server is running!"
 
 @app.route("/apply", methods=["POST"])
 def apply_makeup():
@@ -81,5 +90,15 @@ def apply_makeup():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# if __name__ == "__main__":
+#     app.run(host="127.0.0.1", port=8081)
+
+# if __name__ == "__main__":
+#     app.run(host="127.0.0.1", port=8081)
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8081)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
+# if __name__ == "__main__":
+#     port = int(os.environ.get("PORT", 5000))
+#     app.run(host="0.0.0.0", port=port)
