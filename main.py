@@ -63,7 +63,7 @@ def apply_makeup():
             r, g, b = form.get('eyecolor_r'), form.get('eyecolor_g'), form.get('eyecolor_b')
             if all([r, g, b]):
                 processed = apply_eyecolor(processed, int(r), int(g), int(b))
-
+        return "here"
         # Eyeshadow
         if form.get('enable_eyeshadow') == 'true':
             r, g, b = form.get('eyeshadow_r'), form.get('eyeshadow_g'), form.get('eyeshadow_b')
