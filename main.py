@@ -12,11 +12,11 @@ import os
 app = Flask(__name__)
 
 
-@app.route("/test", methods=["POST"])
+@app.route("/test")
 def test():
     return "Server is running!"
 
-@app.route("/apply", methods=["POST"])
+@app.route("/apply")
 def apply_makeup():
     try:
         if 'file' not in request.files:
