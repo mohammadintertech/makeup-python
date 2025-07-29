@@ -77,9 +77,15 @@ def apply_makeup():
                 r, g, b = form.get('lipstick_r'), form.get('lipstick_g'), form.get('lipstick_b')
                 intensity = form.get('lipstick_intensity')
                 edge = form.get('lipstick_edge')
+                logger.info("Applying lipstick1")
+
                 if all([r, g, b, intensity, edge]):
+                    logger.info("Applying lipstick3")
+
                     processed = apply_lipstick(processed, [int(r), int(g), int(b)], float(intensity), int(edge))
                     processing_steps.append("lipstick")
+                    logger.info("Applying lipstick4")
+
             
             # Eyeliner
             if form.get('enable_eyeliner') == 'true':
