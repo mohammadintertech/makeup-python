@@ -17,11 +17,13 @@ def apply_lipstick(image: np.ndarray, lip_color: list, intensity_factor: float, 
     Returns:
         Image with applied lipstick in BGR format
     """
+    logger.info("Applying lipstick2")
+
     # Convert image to float and make a copy
     image_float = image.astype(np.float32) / 255.0
     output = image_float.copy()
     h, w = image.shape[:2]
-
+    logger.info("Applying lipstick6")
     with mp_face_mesh.FaceMesh(
         static_image_mode=True,
         refine_landmarks=True,
@@ -62,7 +64,7 @@ def apply_lipstick(image: np.ndarray, lip_color: list, intensity_factor: float, 
         mask = cv2.dilate(mask, kernel)
         mask = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), edge_width/2)
         mask = mask / 255.0  # Normalize to [0,1]
-
+        logger.info("Applying lipstick9")
         # Convert lip color to BGR and normalize
         target_color = np.array(lip_color[::-1], dtype=np.float32) / 255.0  # RGB to BGR and normalize
 
@@ -76,6 +78,6 @@ def apply_lipstick(image: np.ndarray, lip_color: list, intensity_factor: float, 
         
         # Apply the effect
         output = output * (1 - alpha) + colored_lips * alpha
-        
+        logger.info("Applying lipstick88")
         # Convert back to 8-bit
         return (np.clip(output, 0, 1) * 255).astype(np.uint8)
