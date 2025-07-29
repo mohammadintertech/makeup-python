@@ -21,17 +21,18 @@ def apply_makeup():
     try:
         if 'file' not in request.files:
             return jsonify({"error": "No file uploaded"}), 400
-
+        return "here2"
         file = request.files['file']
         contents = file.read()
+        return "here1"
         np_arr = np.frombuffer(contents, np.uint8)
         image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
+        return "here3"
         if image is None:
             return jsonify({"error": "Invalid image"}), 400
 
         processed = image.copy()
-
+        return "here4"
         form = request.form
 
         # Foundation
@@ -40,14 +41,14 @@ def apply_makeup():
             intensity = form.get('foundation_intensity')
             if all([r, g, b, intensity]):
                 processed = apply_foundation(processed, [int(r), int(g), int(b)], float(intensity))
-
+        return "here5"
         # Blusher
         if form.get('enable_blusher') == 'true':
             r, g, b = form.get('blusher_r'), form.get('blusher_g'), form.get('blusher_b')
             intensity = form.get('blusher_intensity')
             if all([r, g, b, intensity]):
                 processed = apply_blusher(processed, [int(r), int(g), int(b)], float(intensity))
-
+        return "here"
         # Lipstick
         if form.get('enable_lipstick') == 'true':
             r, g, b = form.get('lipstick_r'), form.get('lipstick_g'), form.get('lipstick_b')
@@ -77,7 +78,7 @@ def apply_makeup():
 
         _, img_encoded = cv2.imencode(".png", processed)
 
-        return "here"
+        return "here6"
         
         
         return send_file(
