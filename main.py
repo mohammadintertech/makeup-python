@@ -21,8 +21,8 @@ def apply_makeup():
     try:
         if 'file' not in request.files:
             return jsonify({"error": "No file uploaded"}), 400
-        return "here2"
         file = request.files['file']
+        return "here2"
         contents = file.read()
         return "here1"
         np_arr = np.frombuffer(contents, np.uint8)
