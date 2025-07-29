@@ -16,7 +16,7 @@ app = Flask(__name__)
 def test():
     return "Server is running!"
 
-@app.route("/apply")
+@app.route("/apply" , methods=['POST'])
 def apply_makeup():
     try:
         if 'file' not in request.files:
@@ -76,6 +76,10 @@ def apply_makeup():
                 processed = apply_eyeshadow(processed, [int(r), int(g), int(b)], float(intensity))
 
         _, img_encoded = cv2.imencode(".png", processed)
+
+        return "here"
+        
+        
         return send_file(
             io.BytesIO(img_encoded.tobytes()),
             mimetype="image/png",
