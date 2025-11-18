@@ -1,12 +1,12 @@
 import subprocess
 import sys
-#
+
 def install_packages():
     """Install all required packages"""
     packages = [
         'flask', 'functions-framework', 'numpy', 'opencv-python', 
         'mediapipe', 'gunicorn', 'flask_cors', 'opencv-contrib-python', 
-        'psutil'
+        'pyngrok', 'psutil'
     ]
     
     for package in packages:
@@ -32,6 +32,11 @@ import time
 import requests
 from flask import Flask, request, send_file, jsonify
 import mediapipe as mp
+from pyngrok import ngrok
+
+
+
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -245,187 +250,117 @@ def apply_eyeliner(image: np.ndarray, eyeliner_color_rgb: list, alpha: float = 0
         logger.error(f"Eyeliner error: {e}")
         return image
 
-# ============================================================================
-# IMPROVED FOUNDATION SECTION - BETTER FACE DETECTION FOR ALL SKIN TONES
-# ============================================================================
-
-
-
-
-# ============================================================================
-# FIXED FOUNDATION SECTION - USES MEDIAPIPE FACE CONTOUR, NOT CIRCLE
-# ============================================================================
-
 class FoundationApplier:
     def __init__(self):
-        self.initialized = True
-        logger.info("✅ Foundation processor initialized successfully")
+        try:
+            self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            self.initialized = True
+            logger.info("OpenCV face detector initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize OpenCV face detector: {e}")
+            self.initialized = False
 
     def apply_foundation(self, image: np.ndarray, foundation_rgb: list, intensity: float) -> np.ndarray:
         if not self.initialized:
             return image
             
         try:
-            h, w = image.shape[:2]
-            result = image.copy().astype(np.float32) / 255.0
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+            
+            if len(faces) == 0:
+                return image
+            
+            result = image.copy()
             foundation_bgr = np.array(foundation_rgb[::-1], dtype=np.float32) / 255.0
             
-            with face_mesh_lock:
-                with mp_face_mesh.FaceMesh(static_image_mode=True, refine_landmarks=True, max_num_faces=1, min_detection_confidence=0.5) as face_mesh:
-                    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                    results = face_mesh.process(rgb_image)
-
-                    if not results.multi_face_landmarks:
-                        logger.info("No face detected for foundation")
-                        return image
-
-                    logger.info("Face detected for foundation application")
-                    
-                    for face_landmarks in results.multi_face_landmarks:
-                        # Use MediaPipe face contour points to create exact face mask
-                        FACE_OVAL = [
-                            10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 
-                            397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 
-                            172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109
-                        ]
-                        
-                        # Get face contour points
-                        face_points = []
-                        for landmark_id in FACE_OVAL:
-                            try:
-                                landmark = face_landmarks.landmark[landmark_id]
-                                px = int(landmark.x * w)
-                                py = int(landmark.y * h)
-                                face_points.append([px, py])
-                            except:
-                                continue
-                        
-                        if len(face_points) < 3:
-                            continue
-                            
-                        # Create mask from face contour
-                        mask = np.zeros((h, w), dtype=np.float32)
-                        face_contour = np.array(face_points, dtype=np.int32)
-                        cv2.fillPoly(mask, [face_contour], 1.0)
-                        
-                        # Create gentle exclusions for eyes and mouth using MediaPipe landmarks
-                        LEFT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
-                        RIGHT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
-                        LIPS = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95]
-                        
-                        # Exclude eyes
-                        for eye_landmarks in [LEFT_EYE, RIGHT_EYE]:
-                            eye_points = []
-                            for landmark_id in eye_landmarks:
-                                try:
-                                    landmark = face_landmarks.landmark[landmark_id]
-                                    px = int(landmark.x * w)
-                                    py = int(landmark.y * h)
-                                    eye_points.append([px, py])
-                                except:
-                                    continue
-                            
-                            if len(eye_points) > 2:
-                                eye_contour = np.array(eye_points, dtype=np.int32)
-                                cv2.fillPoly(mask, [eye_contour], 0.0)
-                        
-                        # Exclude mouth
-                        lip_points = []
-                        for landmark_id in LIPS:
-                            try:
-                                landmark = face_landmarks.landmark[landmark_id]
-                                px = int(landmark.x * w)
-                                py = int(landmark.y * h)
-                                lip_points.append([px, py])
-                            except:
-                                continue
-                        
-                        if len(lip_points) > 2:
-                            lip_contour = np.array(lip_points, dtype=np.int32)
-                            cv2.fillPoly(mask, [lip_contour], 0.0)
-                        
-                        # Smooth the mask for natural edges
-                        mask = cv2.GaussianBlur(mask, (51, 51), 0)
-                        
-                        # Apply foundation with smooth blending
-                        mask_3d = np.stack([mask] * 3, axis=2)
-                        
-                        # Create foundation layer
-                        foundation_layer = np.ones_like(result)
-                        foundation_layer[:, :] = foundation_bgr
-                        
-                        # Blend foundation with original image using the mask
-                        adjusted_intensity = intensity * 0.4  # Reduced for transparency
-                        result = result * (1 - mask_3d * adjusted_intensity) + foundation_layer * mask_3d * adjusted_intensity
+            for (x, y, w, h) in faces:
+                result = self._apply_foundation_to_face_region(result, x, y, w, h, foundation_bgr, intensity)
             
-            return (np.clip(result, 0, 1) * 255).astype(np.uint8)
-            
+            return result
         except Exception as e:
             logger.error(f"Foundation application error: {e}")
             return image
 
-# Initialize the foundation applier
+    def _apply_foundation_to_face_region(self, image: np.ndarray, x: int, y: int, w: int, h: int, foundation_bgr: np.ndarray, intensity: float) -> np.ndarray:
+        mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.float32)
+        center = (x + w//2, y + h//2)
+        axes = (int(w * 0.5), int(h * 0.6))
+        cv2.ellipse(mask, center, axes, 0, 0, 360, 1, -1)
+        
+        eye_y = y + h//3
+        eye_radius = w//12
+        mouth_y = y + int(h * 0.75)
+        mouth_radius = w//8
+        
+        left_eye_x = x + w//3
+        cv2.circle(mask, (left_eye_x, eye_y), eye_radius, 0, -1)
+        right_eye_x = x + 2*w//3
+        cv2.circle(mask, (right_eye_x, eye_y), eye_radius, 0, -1)
+        mouth_x = x + w//2
+        cv2.ellipse(mask, (mouth_x, mouth_y), (mouth_radius, mouth_radius//2), 0, 0, 360, 0, -1)
+        
+        mask = cv2.GaussianBlur(mask, (21, 21), 0)
+        
+        face_region = image[y:y+h, x:x+w]
+        if face_region.size > 0:
+            cheek_samples = []
+            cheek_y = y + h//2
+            cheek_left_x = x + w//4
+            cheek_right_x = x + 3*w//4
+            
+            for dy in range(-h//8, h//8, 5):
+                for dx in range(-w//12, w//12, 5):
+                    py, px = cheek_y + dy, cheek_left_x + dx
+                    if 0 <= py < image.shape[0] and 0 <= px < image.shape[1]:
+                        cheek_samples.append(image[py, px].astype(np.float32) / 255.0)
+                    py, px = cheek_y + dy, cheek_right_x + dx
+                    if 0 <= py < image.shape[0] and 0 <= px < image.shape[1]:
+                        cheek_samples.append(image[py, px].astype(np.float32) / 255.0)
+            
+            if cheek_samples:
+                skin_bgr = np.mean(cheek_samples, axis=0)
+            else:
+                skin_bgr = np.array([0.7, 0.6, 0.5])
+        else:
+            skin_bgr = np.array([0.7, 0.6, 0.5])
+        
+        adjusted_foundation = self._adjust_foundation_color(foundation_bgr, skin_bgr)
+        image_float = image.astype(np.float32) / 255.0
+        foundation_layer = np.zeros_like(image_float)
+        foundation_layer[:, :] = adjusted_foundation
+        
+        blurred = cv2.GaussianBlur(image_float, (0, 0), 2.0)
+        texture = image_float - blurred
+        texture_strength = 0.4 * (1 - intensity)
+        
+        mask_3d = np.stack([mask] * 3, axis=2)
+        result = image_float * (1 - mask_3d * intensity) + foundation_layer * mask_3d * intensity
+        result = np.clip(result + texture * texture_strength, 0, 1)
+        
+        return (result * 255).astype(np.uint8)
+
+    def _adjust_foundation_color(self, target_bgr: np.ndarray, skin_bgr: np.ndarray) -> np.ndarray:
+        adapted = target_bgr * 0.7 + skin_bgr * 0.3
+        return np.clip(adapted, 0, 1)
+
 try:
     foundation_applier = FoundationApplier()
     FOUNDATION_WORKING = True
-    logger.info("✅ Foundation processor initialized successfully")
 except Exception as e:
-    logger.error(f"❌ Failed to initialize foundation processor: {e}")
+    logger.error(f"Failed to initialize foundation processor: {e}")
     foundation_applier = None
     FOUNDATION_WORKING = False
 
 def apply_foundation(image, foundation_rgb, intensity):
-    """Public interface for foundation application"""
     if not FOUNDATION_WORKING or foundation_applier is None:
-        logger.warning("Foundation processor not available - returning original image")
         return image
-    
     try:
-        logger.info(f"Applying foundation with color {foundation_rgb} and intensity {intensity}")
-        result = foundation_applier.apply_foundation(image, foundation_rgb, float(intensity))
+        result = foundation_applier.apply_foundation(image, foundation_rgb, intensity)
         return result if result is not None else image
     except Exception as e:
         logger.error(f"Error applying foundation: {e}")
         return image
-
-
-
-
-
-
-
-
-
-# Initialize the foundation applier
-try:
-    foundation_applier = FoundationApplier()
-    FOUNDATION_WORKING = foundation_applier.initialized
-    if FOUNDATION_WORKING:
-        logger.info("✅ Foundation processor initialized successfully")
-    else:
-        logger.warning("❌ Foundation processor initialization failed")
-except Exception as e:
-    logger.error(f"❌ Failed to initialize foundation processor: {e}")
-    foundation_applier = None
-    FOUNDATION_WORKING = False
-
-def apply_foundation(image, foundation_rgb, intensity):
-    """Public interface for foundation application"""
-    if not FOUNDATION_WORKING or foundation_applier is None:
-        logger.warning("Foundation processor not available - returning original image")
-        return image
-    
-    try:
-        logger.info(f"Applying foundation with color {foundation_rgb} and intensity {intensity}")
-        result = foundation_applier.apply_foundation(image, foundation_rgb, float(intensity))
-        return result if result is not None else image
-    except Exception as e:
-        logger.error(f"Error applying foundation: {e}")
-        return image
-
-# ============================================================================
-# LIPSTICK FUNCTION (UNCHANGED)
-# ============================================================================
 
 def apply_lipstick(image: np.ndarray, lip_color: list, intensity_factor: float, edge_width: int) -> np.ndarray:
     """Apply lipstick to an image with improved handling"""
@@ -487,7 +422,7 @@ def apply_lipstick(image: np.ndarray, lip_color: list, intensity_factor: float, 
         return image
 
 # ============================================================================
-# FLASK APPLICATION (UNCHANGED)
+# FLASK APPLICATION
 # ============================================================================
 
 app = Flask(__name__)
@@ -666,22 +601,65 @@ def internal_error(error):
 
 def run_flask():
     try:
-        port = int(os.environ.get('PORT', 5000))
-        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     except Exception as e:
         logger.error(f"Flask server error: {e}")
 
+def keep_alive():
+    consecutive_failures = 0
+    while True:
+        try:
+            response = requests.get("http://127.0.0.1:5000/ping", timeout=5)
+            if response.status_code == 200:
+                consecutive_failures = 0
+            else:
+                consecutive_failures += 1
+        except:
+            consecutive_failures += 1
+        
+        if consecutive_failures > 5:
+            logger.error("Multiple consecutive keep-alive failures")
+        
+        time.sleep(30)
+
 # ============================================================================
-# START APPLICATION - SIMPLIFIED FOR RENDER.COM
+# START APPLICATION
 # ============================================================================
 
 if __name__ == "__main__":
-    logger.info("🚀 Starting Makeup API on Render.com")
-    print(f"\n🎨 Makeup API is running!")
-    print(f"🔍 Test URL: http://0.0.0.0:{os.environ.get('PORT', 5000)}/test")
-    print(f"❤️ Health Check: http://0.0.0.0:{os.environ.get('PORT', 5000)}/health")
-    print("⚡ Ready to process makeup requests!\n")
-    
-    # Run Flask directly (Render will handle the port)
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    # Start Flask in thread
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    # Start keep-alive
+    keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+    keep_alive_thread.start()
+
+    # Setup ngrok
+    try:
+        ngrok.set_auth_token("30XtsXpxg1sYXAd6QnkfkRUKTi6_3ATFdXVW7zNc88ZK3t8Sh")
+        public_url = ngrok.connect(5000).public_url
+        logger.info(f"Ngrok tunnel established: {public_url}")
+        print(f"\n🎨 Makeup API is running!")
+        print(f"📱 Public URL: {public_url}")
+        print(f"🔍 Test URL: {public_url}/test")
+        print(f"❤️ Health Check: {public_url}/health")
+        print("⚡ Keep this cell running!\n")
+    except Exception as e:
+        logger.error(f"Failed to setup ngrok tunnel: {e}")
+        print("❌ Failed to setup public URL")
+
+    # Keep alive
+    startup_time = time.time()
+    try:
+        while True:
+            if int(time.time() - startup_time) % 60 == 0:
+                uptime_hours = (time.time() - startup_time) / 3600
+                logger.info(f"Server running - Uptime: {uptime_hours:.1f} hours")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Server shutdown requested")
+        print("🛑 Server shutting down...")
+    except Exception as e:
+        logger.error(f"Server loop error: {e}")
+        print("❌ Server encountered an error")

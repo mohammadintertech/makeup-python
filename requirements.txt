@@ -6,3 +6,4 @@ mediapipe
 gunicorn
 flask_cors
 opencv-contrib-python
+pyngrok

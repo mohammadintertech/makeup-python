@@ -1,12 +1,12 @@
 import subprocess
 import sys
-#
+
 def install_packages():
     """Install all required packages"""
     packages = [
         'flask', 'functions-framework', 'numpy', 'opencv-python', 
         'mediapipe', 'gunicorn', 'flask_cors', 'opencv-contrib-python', 
-        'psutil'
+        'pyngrok', 'psutil'
     ]
     
     for package in packages:
@@ -32,6 +32,7 @@ import time
 import requests
 from flask import Flask, request, send_file, jsonify
 import mediapipe as mp
+from pyngrok import ngrok
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -666,22 +667,65 @@ def internal_error(error):
 
 def run_flask():
     try:
-        port = int(os.environ.get('PORT', 5000))
-        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     except Exception as e:
         logger.error(f"Flask server error: {e}")
 
+def keep_alive():
+    consecutive_failures = 0
+    while True:
+        try:
+            response = requests.get("http://127.0.0.1:5000/ping", timeout=5)
+            if response.status_code == 200:
+                consecutive_failures = 0
+            else:
+                consecutive_failures += 1
+        except:
+            consecutive_failures += 1
+        
+        if consecutive_failures > 5:
+            logger.error("Multiple consecutive keep-alive failures")
+        
+        time.sleep(30)
+
 # ============================================================================
-# START APPLICATION - SIMPLIFIED FOR RENDER.COM
+# START APPLICATION
 # ============================================================================
 
 if __name__ == "__main__":
-    logger.info("🚀 Starting Makeup API on Render.com")
-    print(f"\n🎨 Makeup API is running!")
-    print(f"🔍 Test URL: http://0.0.0.0:{os.environ.get('PORT', 5000)}/test")
-    print(f"❤️ Health Check: http://0.0.0.0:{os.environ.get('PORT', 5000)}/health")
-    print("⚡ Ready to process makeup requests!\n")
-    
-    # Run Flask directly (Render will handle the port)
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    # Start Flask in thread
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    # Start keep-alive
+    keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+    keep_alive_thread.start()
+
+    # Setup ngrok
+    try:
+        ngrok.set_auth_token("30XtsXpxg1sYXAd6QnkfkRUKTi6_3ATFdXVW7zNc88ZK3t8Sh")
+        public_url = ngrok.connect(5000).public_url
+        logger.info(f"Ngrok tunnel established: {public_url}")
+        print(f"\n🎨 Makeup API is running!")
+        print(f"📱 Public URL: {public_url}")
+        print(f"🔍 Test URL: {public_url}/test")
+        print(f"❤️ Health Check: {public_url}/health")
+        print("⚡ Keep this cell running!\n")
+    except Exception as e:
+        logger.error(f"Failed to setup ngrok tunnel: {e}")
+        print("❌ Failed to setup public URL")
+
+    # Keep alive
+    startup_time = time.time()
+    try:
+        while True:
+            if int(time.time() - startup_time) % 60 == 0:
+                uptime_hours = (time.time() - startup_time) / 3600
+                logger.info(f"Server running - Uptime: {uptime_hours:.1f} hours")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Server shutdown requested")
+        print("🛑 Server shutting down...")
+    except Exception as e:
+        logger.error(f"Server loop error: {e}")
+        print("❌ Server encountered an error")
