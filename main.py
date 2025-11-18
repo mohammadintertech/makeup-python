@@ -1,19 +1,26 @@
 import subprocess
 import sys
-#
+
 def install_packages():
     """Install all required packages"""
     packages = [
-        'flask', 'functions-framework', 'numpy', 'opencv-python', 
-        'mediapipe', 'gunicorn', 'flask_cors', 'opencv-contrib-python', 
-        'psutil'
+        'flask==2.3.3', 
+        'functions-framework==3.10.0', 
+        'numpy==1.24.3', 
+        'opencv-python==4.8.1.78', 
+        'mediapipe==0.10.9', 
+        'gunicorn==21.2.0', 
+        'flask-cors==4.0.0', 
+        'psutil==5.9.6'
     ]
     
     for package in packages:
         print(f"📦 Installing {package}...")
         try:
+            # Extract package name without version for installation
+            package_name = package.split('==')[0]
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
-            print(f"✅ Successfully installed {package}")
+            print(f"✅ Successfully installed {package_name}")
         except subprocess.CalledProcessError as e:
             print(f"❌ Failed to install {package}: {e}")
 
@@ -46,7 +53,7 @@ MAX_IMAGE_SIZE = 2048
 SUPPORTED_FORMATS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
 
 # ============================================================================
-# MAKEUP PROCESSOR FUNCTIONS
+# MAKEUP PROCESSOR FUNCTIONS (UNCHANGED)
 # ============================================================================
 
 def apply_blusher(image: np.ndarray, blusher_color_rgb: list, intensity_factor: float = 0.5) -> np.ndarray:
@@ -246,14 +253,7 @@ def apply_eyeliner(image: np.ndarray, eyeliner_color_rgb: list, alpha: float = 0
         return image
 
 # ============================================================================
-# IMPROVED FOUNDATION SECTION - BETTER FACE DETECTION FOR ALL SKIN TONES
-# ============================================================================
-
-
-
-
-# ============================================================================
-# FIXED FOUNDATION SECTION - USES MEDIAPIPE FACE CONTOUR, NOT CIRCLE
+# FOUNDATION SECTION (UNCHANGED)
 # ============================================================================
 
 class FoundationApplier:
@@ -282,14 +282,12 @@ class FoundationApplier:
                     logger.info("Face detected for foundation application")
                     
                     for face_landmarks in results.multi_face_landmarks:
-                        # Use MediaPipe face contour points to create exact face mask
                         FACE_OVAL = [
                             10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 
                             397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 
                             172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109
                         ]
                         
-                        # Get face contour points
                         face_points = []
                         for landmark_id in FACE_OVAL:
                             try:
@@ -303,17 +301,14 @@ class FoundationApplier:
                         if len(face_points) < 3:
                             continue
                             
-                        # Create mask from face contour
                         mask = np.zeros((h, w), dtype=np.float32)
                         face_contour = np.array(face_points, dtype=np.int32)
                         cv2.fillPoly(mask, [face_contour], 1.0)
                         
-                        # Create gentle exclusions for eyes and mouth using MediaPipe landmarks
                         LEFT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
                         RIGHT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
                         LIPS = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95]
                         
-                        # Exclude eyes
                         for eye_landmarks in [LEFT_EYE, RIGHT_EYE]:
                             eye_points = []
                             for landmark_id in eye_landmarks:
@@ -329,7 +324,6 @@ class FoundationApplier:
                                 eye_contour = np.array(eye_points, dtype=np.int32)
                                 cv2.fillPoly(mask, [eye_contour], 0.0)
                         
-                        # Exclude mouth
                         lip_points = []
                         for landmark_id in LIPS:
                             try:
@@ -344,18 +338,14 @@ class FoundationApplier:
                             lip_contour = np.array(lip_points, dtype=np.int32)
                             cv2.fillPoly(mask, [lip_contour], 0.0)
                         
-                        # Smooth the mask for natural edges
                         mask = cv2.GaussianBlur(mask, (51, 51), 0)
                         
-                        # Apply foundation with smooth blending
                         mask_3d = np.stack([mask] * 3, axis=2)
                         
-                        # Create foundation layer
                         foundation_layer = np.ones_like(result)
                         foundation_layer[:, :] = foundation_bgr
                         
-                        # Blend foundation with original image using the mask
-                        adjusted_intensity = intensity * 0.4  # Reduced for transparency
+                        adjusted_intensity = intensity * 0.4
                         result = result * (1 - mask_3d * adjusted_intensity) + foundation_layer * mask_3d * adjusted_intensity
             
             return (np.clip(result, 0, 1) * 255).astype(np.uint8)
@@ -369,41 +359,6 @@ try:
     foundation_applier = FoundationApplier()
     FOUNDATION_WORKING = True
     logger.info("✅ Foundation processor initialized successfully")
-except Exception as e:
-    logger.error(f"❌ Failed to initialize foundation processor: {e}")
-    foundation_applier = None
-    FOUNDATION_WORKING = False
-
-def apply_foundation(image, foundation_rgb, intensity):
-    """Public interface for foundation application"""
-    if not FOUNDATION_WORKING or foundation_applier is None:
-        logger.warning("Foundation processor not available - returning original image")
-        return image
-    
-    try:
-        logger.info(f"Applying foundation with color {foundation_rgb} and intensity {intensity}")
-        result = foundation_applier.apply_foundation(image, foundation_rgb, float(intensity))
-        return result if result is not None else image
-    except Exception as e:
-        logger.error(f"Error applying foundation: {e}")
-        return image
-
-
-
-
-
-
-
-
-
-# Initialize the foundation applier
-try:
-    foundation_applier = FoundationApplier()
-    FOUNDATION_WORKING = foundation_applier.initialized
-    if FOUNDATION_WORKING:
-        logger.info("✅ Foundation processor initialized successfully")
-    else:
-        logger.warning("❌ Foundation processor initialization failed")
 except Exception as e:
     logger.error(f"❌ Failed to initialize foundation processor: {e}")
     foundation_applier = None
@@ -496,7 +451,7 @@ PROCESSORS_LOADED = True
 @app.route("/test")
 def test():
     status = "✅ Running" if PROCESSORS_LOADED else "⚠️ Running (processors not loaded)"
-    return f"Makeup API is {status} properly in Colab!"
+    return f"Makeup API is {status} properly!"
 
 @app.route("/ping")
 def ping():
@@ -664,15 +619,8 @@ def too_large(e):
 def internal_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
-def run_flask():
-    try:
-        port = int(os.environ.get('PORT', 5000))
-        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
-    except Exception as e:
-        logger.error(f"Flask server error: {e}")
-
 # ============================================================================
-# START APPLICATION - SIMPLIFIED FOR RENDER.COM
+# START APPLICATION FOR RENDER.COM
 # ============================================================================
 
 if __name__ == "__main__":
