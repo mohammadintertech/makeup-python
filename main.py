@@ -1,31 +1,31 @@
 import subprocess
 import sys
 
-def install_packages():
-    """Install all required packages"""
-    packages = [
-        'flask==2.3.3', 
-        'functions-framework==3.10.0', 
-        'numpy==1.24.3', 
-        'opencv-python==4.8.1.78', 
-        'mediapipe==0.10.9', 
-        'gunicorn==21.2.0', 
-        'flask-cors==4.0.0', 
-        'psutil==5.9.6'
-    ]
+# def install_packages():
+#     """Install all required packages"""
+#     packages = [
+#         'flask==2.3.3', 
+#         'functions-framework==3.10.0', 
+#         'numpy==1.24.3', 
+#         'opencv-python==4.8.1.78', 
+#         'mediapipe==0.10.9', 
+#         'gunicorn==21.2.0', 
+#         'flask-cors==4.0.0', 
+#         'psutil==5.9.6'
+#     ]
     
-    for package in packages:
-        print(f"📦 Installing {package}...")
-        try:
-            # Extract package name without version for installation
-            package_name = package.split('==')[0]
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
-            print(f"✅ Successfully installed {package_name}")
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to install {package}: {e}")
+#     for package in packages:
+#         print(f"📦 Installing {package}...")
+#         try:
+#             # Extract package name without version for installation
+#             package_name = package.split('==')[0]
+#             subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
+#             print(f"✅ Successfully installed {package_name}")
+#         except subprocess.CalledProcessError as e:
+#             print(f"❌ Failed to install {package}: {e}")
 
-# Run the installation
-install_packages()
+# # Run the installation
+# install_packages()
 
 import io  
 import os
