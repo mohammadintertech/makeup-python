@@ -268,8 +268,8 @@ def index():
         "message": "Multi-API Proxy Server",
         "status": "running",
         "apis": {
-            "makeup": COLAB_API_URL,
-            "oasis": OASIS_API_URL
+            # "makeup": COLAB_API_URL,
+            # "oasis": OASIS_API_URL
         },
         "usage": "Use /test endpoint for full endpoint list"
     })
