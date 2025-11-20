@@ -639,6 +639,34 @@ def internal_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
 # ============================================================================
+# AUTO REQUEST FUNCTIONALITY (ADDED AT THE END)
+# ============================================================================
+
+def auto_ping_server():
+    """Automatically ping the server every 1 minute to keep it awake"""
+    def ping_loop():
+        target_url = "https://makeup-python-5-6oru.onrender.com/ping"
+        while True:
+            try:
+                response = requests.get(target_url, timeout=10)
+                logger.info(f"🔄 Auto-ping sent to {target_url} - Status: {response.status_code}")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"⚠️ Auto-ping failed: {e}")
+            except Exception as e:
+                logger.error(f"❌ Unexpected error in auto-ping: {e}")
+            
+            # Wait 60 seconds before next ping
+            time.sleep(300)
+    
+    # Start the auto-ping thread
+    ping_thread = threading.Thread(target=ping_loop, daemon=True)
+    ping_thread.start()
+    logger.info("✅ Auto-ping service started (requests every 300 seconds)")
+
+# Start the auto-ping service when the application starts
+auto_ping_server()
+
+# ============================================================================
 # START APPLICATION FOR RENDER.COM
 # ============================================================================
 
@@ -652,4 +680,3 @@ if __name__ == "__main__":
     # Run Flask directly (Render will handle the port)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
-
