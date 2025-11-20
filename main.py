@@ -113,10 +113,10 @@ def apply_blusher(image: np.ndarray, blusher_color_rgb: list, intensity_factor: 
         logger.error(f"Blusher error: {e}")
         return image
 
-def apply_eyeshadow(image: np.ndarray, eyeshadow_color_rgb: list, transparency_factor: float = 0.7) -> np.ndarray:
-    """Apply eyeshadow to an image with given RGB color"""
+def apply_eyeshadow(image: np.ndarray, eyeshadow_color_rgb: list, transparency_factor: float = 0.9) -> np.ndarray:
+    """Apply eyeshadow to an image with given RGB color - closer to eyes with higher intensity"""
     try:
-        shadow_color = eyeshadow_color_rgb[::-1]
+        shadow_color = eyeshadow_color_rgb[::-1]  # Convert RGB to BGR
         h, w = image.shape[:2]
         
         with face_mesh_lock:
@@ -126,39 +126,58 @@ def apply_eyeshadow(image: np.ndarray, eyeshadow_color_rgb: list, transparency_f
                 if results.multi_face_landmarks:
                     output = image.copy()
                     for face_landmarks in results.multi_face_landmarks:
-                        LEFT_EYE = [33, 246, 161, 160, 159, 158, 157, 173, 133]
-                        LEFT_BROW = [70, 63, 105, 66, 107, 55, 65, 52]
-                        RIGHT_EYE = [362, 398, 384, 385, 386, 387, 388, 466, 263]
-                        RIGHT_BROW = [336, 296, 334, 293, 300, 276, 283, 282]
+                        # More focused eye landmarks for closer application
+                        LEFT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+                        RIGHT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
+                        
+                        # Use fewer brow points to keep it closer to eyes
+                        LEFT_BROW_LOWER = [70, 63, 105]  # Only lower brow points
+                        RIGHT_BROW_LOWER = [336, 296, 334]  # Only lower brow points
 
                         def get_landmark_points(indices):
                             return np.array([(int(face_landmarks.landmark[i].x * w), int(face_landmarks.landmark[i].y * h)) for i in indices], dtype=np.int32)
 
                         left_eye = get_landmark_points(LEFT_EYE)
-                        left_brow = get_landmark_points(LEFT_BROW)
+                        left_brow_lower = get_landmark_points(LEFT_BROW_LOWER)
                         right_eye = get_landmark_points(RIGHT_EYE)
-                        right_brow = get_landmark_points(RIGHT_BROW)
+                        right_brow_lower = get_landmark_points(RIGHT_BROW_LOWER)
 
-                        def create_eyeshadow_area(eye_points, brow_points):
-                            lower_brow_y = min(brow_points, key=lambda x: x[1])[1] + 5
-                            adjusted_brow_points = [point for point in brow_points if point[1] > lower_brow_y]
-                            all_points = np.vstack((eye_points, adjusted_brow_points))
-                            return cv2.convexHull(all_points)
+                        def create_eyeshadow_area_close_to_eye(eye_points, brow_lower_points):
+                            # Create a tighter area around the eye
+                            # Use only the upper part of eye points and lower brow points
+                            eye_upper = [point for point in eye_points if point[1] < np.mean(eye_points[:, 1])]
+                            
+                            # Move brow points closer to the eye
+                            adjusted_brow_points = []
+                            for point in brow_lower_points:
+                                # Move brow points downward to be closer to the eye
+                                new_y = point[1] + (np.mean(eye_points[:, 1]) - point[1]) * 0.6
+                                adjusted_brow_points.append([point[0], int(new_y)])
+                            
+                            all_points = np.vstack((eye_upper, adjusted_brow_points))
+                            return cv2.convexHull(all_points.astype(np.int32))
 
-                        left_area = create_eyeshadow_area(left_eye, left_brow)
-                        right_area = create_eyeshadow_area(right_eye, right_brow)
+                        left_area = create_eyeshadow_area_close_to_eye(left_eye, left_brow_lower)
+                        right_area = create_eyeshadow_area_close_to_eye(right_eye, right_brow_lower)
                         shadow_overlay = np.zeros_like(image)
 
                         for area in [left_area, right_area]:
                             mask = np.zeros((h, w), dtype=np.uint8)
                             cv2.fillConvexPoly(mask, area, 255)
-                            mask_blur = cv2.GaussianBlur(mask, (51, 51), 0)
+                            
+                            # Use less blur for more defined, closer-to-eye application
+                            mask_blur = cv2.GaussianBlur(mask, (31, 31), 0)  # Reduced blur radius
                             mask_normalized = mask_blur / 255.0
 
+                            # Apply color with higher intensity
                             for c in range(3):
-                                shadow_overlay[:, :, c] = np.clip(shadow_overlay[:, :, c] + mask_normalized * shadow_color[c] * transparency_factor, 0, 255).astype(np.uint8)
+                                shadow_overlay[:, :, c] = np.clip(
+                                    shadow_overlay[:, :, c] + mask_normalized * shadow_color[c] * transparency_factor * 1.3, 
+                                    0, 255
+                                ).astype(np.uint8)
 
-                        output = cv2.addWeighted(output, 1.0, shadow_overlay, 0.7, 0)
+                        # Stronger blending for more intense eyeshadow
+                        output = cv2.addWeighted(output, 1.0, shadow_overlay, 0.9, 0)  # Increased blend strength
                     return output
                 else:
                     return image
