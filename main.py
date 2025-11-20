@@ -656,12 +656,12 @@ def auto_ping_server():
                 logger.error(f"❌ Unexpected error in auto-ping: {e}")
             
             # Wait 60 seconds before next ping
-            time.sleep(60)
+            time.sleep(300)
     
     # Start the auto-ping thread
     ping_thread = threading.Thread(target=ping_loop, daemon=True)
     ping_thread.start()
-    logger.info("✅ Auto-ping service started (requests every 60 seconds)")
+    logger.info("✅ Auto-ping service started (requests every 300 seconds)")
 
 # Start the auto-ping service when the application starts
 auto_ping_server()
