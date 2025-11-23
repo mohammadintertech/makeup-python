@@ -21,6 +21,9 @@ CORS(app)  # Enable CORS for all routes
 COLAB_API_URL = "https://makeup-python-5-6oru.onrender.com"
 OASIS_API_URL = "https://www.oasisonline.ps/WS"
 
+# Track if we've already pinged
+_ping_executed = False
+
 # ============================================================================
 # PING FUNCTION
 # ============================================================================
@@ -217,11 +220,103 @@ def oasis_proxy(endpoint):
         logger.error(f"Oasis proxy error: {str(e)}")
         return jsonify({"error": f"Oasis proxy error: {str(e)}"}), 500
 
-# Specific Oasis endpoints for convenience
+# ============================================================================
+# MAKEUP PRODUCTS API PROXY
+# ============================================================================
+@app.route('/getProductsAPP', methods=['GET'])
+def get_products_app():
+    """
+    Proxy for the new makeup products API
+    Usage: /getProductsAPP?limit=10&page=1&c_id=136,72,78,84,87,137,139,138&makeup=1
+    """
+    try:
+        # Ping Colab API in background (don't wait for response)
+        ping_colab_api_async()
+        
+        # Build the target URL for the new API
+        target_url = f"{OASIS_API_URL}/getProductsAPP"
+        
+        # Prepare query parameters
+        params = {
+            'limit': request.args.get('limit', '100'),
+            'page': request.args.get('page', '1'),
+            'c_id': request.args.get('c_id', '136,72,78,84,87,137,139,138'),
+            'makeup': request.args.get('makeup', '1')
+        }
+        
+        # Add any additional parameters
+        for key in request.args:
+            if key not in ['limit', 'page', 'c_id', 'makeup']:
+                params[key] = request.args.get(key)
+        
+        logger.info(f"Fetching makeup products with params: {params}")
+        
+        # Forward the request to Oasis API
+        response = requests.get(
+            target_url,
+            params=params,
+            headers={
+                'User-Agent': 'MakeupApp/1.0',
+                'Accept': 'application/json',
+            },
+            timeout=30
+        )
+        
+        # Process response
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                logger.info(f"Successfully fetched {len(data.get('catproducts', []))} categories")
+                return jsonify(data)
+            except ValueError as e:
+                logger.error(f"JSON parse error: {e}")
+                return jsonify({"error": "Invalid JSON response from API"}), 500
+        else:
+            logger.error(f"API returned status {response.status_code}: {response.text}")
+            return Response(response.text, status=response.status_code, mimetype='text/plain')
+            
+    except requests.exceptions.Timeout:
+        logger.error("Timeout fetching makeup products")
+        return jsonify({"error": "Oasis API timeout"}), 504
+    except requests.exceptions.ConnectionError:
+        logger.error("Connection error fetching makeup products")
+        return jsonify({"error": "Cannot connect to Oasis API"}), 503
+    except Exception as e:
+        logger.error(f"Makeup products proxy error: {str(e)}")
+        return jsonify({"error": f"Makeup products proxy error: {str(e)}"}), 500
+
+@app.route('/getMakeupProducts', methods=['GET'])
+def get_makeup_products():
+    """
+    Convenience endpoint specifically for makeup products with optimized defaults
+    Usage: /getMakeupProducts?limit=50
+    """
+    try:
+        # Use optimized defaults for makeup products
+        params = {
+            'limit': request.args.get('limit', '50'),
+            'page': request.args.get('page', '1'),
+            'c_id': '136,72,78,84,87,137,139,138',  # Makeup categories
+            'makeup': '1'
+        }
+        
+        # Create a new request with these parameters
+        request.args = type('Args', (), {**params, 'get': lambda self, key, default=None: params.get(key, default)})()
+        
+        # Call the main proxy function
+        return get_products_app()
+        
+    except Exception as e:
+        logger.error(f"Makeup products convenience endpoint error: {str(e)}")
+        return jsonify({"error": f"Error fetching makeup products: {str(e)}"}), 500
+
+# ============================================================================
+# LEGACY OASIS ENDPOINTS (for backward compatibility)
+# ============================================================================
 @app.route('/getProducts', methods=['GET'])
 def get_products():
     """
-    Specific endpoint for getProducts
+    Specific endpoint for getProducts (legacy)
     Usage: /getProducts?c_id=123
     """
     # Ping Colab API in background (don't wait for response)
@@ -247,36 +342,28 @@ def get_product_details():
 def test():
     return jsonify({
         "message": "Multi-API Proxy Server is running", 
-        "colab_url": COLAB_API_URL,
-        "oasis_url": OASIS_API_URL,
-        "endpoints": {
-            "Makeup API": {
-                "POST /apply": "Returns binary image data (Uint8List)",
-                "POST /apply_base64": "Returns base64 encoded image in JSON",
-                "GET /health": "Health check"
-            },
-            "Oasis API": {
-                "GET /getProducts": "Get products by category (with background ping)",
-                "GET /getCategories": "Get categories",
-                "GET /getProductDetails": "Get product details",
-                "ANY /oasis/<endpoint>": "Generic Oasis API proxy"
-            }
-        }
+        "status": "healthy"
     })
 
 @app.route('/')
 def index():
     return jsonify({
-        "message": "Multi-API Proxy Server",
-        "status": "running",
-        "apis": {
-            # "makeup": COLAB_API_URL,
-            # "oasis": OASIS_API_URL
-        },
-        "usage": "Use /test endpoint for full endpoint list"
+        "message": "API Proxy Server",
+        "status": "running"
     })
 
-# ... your existing code ...
+# ============================================================================
+# APPLICATION STARTUP - FIXED FOR NEW FLASK VERSION
+# ============================================================================
+@app.before_request
+def before_first_request():
+    """Ping Colab API on first request - fixed for new Flask version"""
+    global _ping_executed
+    if not _ping_executed:
+        logger.info("Starting up Multi-API Proxy Server - First request")
+        ping_colab_api_async()
+        _ping_executed = True
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=False)
 
